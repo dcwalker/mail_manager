@@ -39,6 +39,7 @@ The file should be named `config.yaml` and should go in the same directory as `M
           - Deleted Messages
           - Archive
           - Sent Messages
+        days_until_reminder: 3
 
     smtp:
       to_address: maildrop_user@sync.omnigroup.com
@@ -57,6 +58,8 @@ The file should be named `config.yaml` and should go in the same directory as `M
 `delete_messages` _(optional)_ -- there are some messages I want deleted right away so they don't clutter my search results when searching in Mail.app.  Messages that match the rules in `delete_messages` are marked deleted when the script runs.
 
 `expunge_mailboxes` _(optional)_ -- Mail.app is lazy about when it actually calls expunge on a folder.  [Status Board](http://panic.com/statusboard/) has a bug where it includes messages marked deleted in its counts of folders.  This option is to work around that.
+
+`days_until_reminder` _(optional)_ -- If a message is still in the "OmniFocus tasks" folder after this many days then send the message again, as a reminder.
 
 `smtp` -- The script needs your SMTP credentials so that it can send your tasks to you.
 

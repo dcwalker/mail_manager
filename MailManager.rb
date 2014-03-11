@@ -70,13 +70,23 @@ def delete_messages (imap_authenticated_connection, rules)
   end
 end
 
-def send_mail_drop_messages (imap_authenticated_connection, smtp_config)
+def send_mail_drop_messages (imap_authenticated_connection, smtp_config, days_until_reminder=nil)
   if not imap_authenticated_connection.list('', 'OmniFocus tasks')
     imap_authenticated_connection.create('OmniFocus tasks')
   end
 
   imap_authenticated_connection.select('OmniFocus tasks')
-  puts " Messages in 'OmniFocus tasks' folder not yet sent to MailDrop:"
+
+  unless days_until_reminder.nil?
+    reminder_date = Date.today - days_until_reminder.to_i
+    puts " Sending reminder tasks for messages before #{reminder_date.strftime("%d-%b-%Y")}"
+    imap_authenticated_connection.uid_search(["KEYWORD", "SentToMailDrop", "NOT", "KEYWORD", "SentReminderToMailDrop", "NOT", "DELETED", "BEFORE", reminder_date.strftime("%d-%b-%Y")]).each do |message_id|
+      imap_authenticated_connection.uid_store(message_id, "+FLAGS", ["SentReminderToMailDrop"])
+      imap_authenticated_connection.uid_store(message_id, "-FLAGS", ["SentToMailDrop"])
+    end
+  end
+
+  puts " Messages in 'OmniFocus tasks' folder to send to MailDrop:"
   imap_authenticated_connection.uid_search(["NOT", "KEYWORD", "SentToMailDrop", "NOT", "DELETED"]).each do |message_id|
     flags = imap_authenticated_connection.uid_fetch(message_id, "FLAGS")[0].attr["FLAGS"]
     envelope = imap_authenticated_connection.uid_fetch(message_id, "ENVELOPE")[0].attr["ENVELOPE"]
@@ -113,7 +123,7 @@ def send_mail_drop_messages (imap_authenticated_connection, smtp_config)
     end
 
     text_part = Mail::Part.new do
-      content_type = content_type.empty? ? "text/plain; charset=UTF-8" : content_type
+      content_type = (content_type.nil? || content_type.empty?) ? "text/plain; charset=UTF-8" : content_type
       content_type content_type
       text = text_part_body.empty? ? html_part_body : text_part_body
       body "message:<#{mail.message_id}>\n\n#{text}\n"
@@ -140,6 +150,7 @@ def cleanup_old_maildrop_messages(imap_authenticated_connection)
     count = 0
     imap_authenticated_connection.uid_search(["KEYWORD", "SentToMailDrop"]).each do |message_id|
       imap_authenticated_connection.uid_store(message_id, "-FLAGS", ["SentToMailDrop"])
+      imap_authenticated_connection.uid_store(message_id, "-FLAGS", ["SentReminderToMailDrop"])
       count =+ 1
     end
     print "(#{count}) "
@@ -159,7 +170,7 @@ config["accounts"].each do |account|
   mark_as_seen(imap, account["mark_as_seen"]) if account.has_key?("mark_as_seen")
 
   delete_messages(imap, account["delete_messages"]) if account.has_key?("delete_messages")
-  send_mail_drop_messages(imap, config["smtp"])
+  send_mail_drop_messages(imap, config["smtp"], account["days_until_reminder"])
   cleanup_old_maildrop_messages(imap)
   expunge_mailboxes(imap, account["expunge_mailboxes"]) if account.has_key?("expunge_mailboxes")
 
