@@ -3,6 +3,7 @@ require 'net/smtp'
 require 'openssl'
 require 'mail'
 require 'yaml'
+require 'htmlentities'
 
 Net::IMAP::add_authenticator('PLAIN', Net::IMAP::PlainAuthenticator)
 Net::IMAP::add_authenticator('LOGIN', Net::IMAP::LoginAuthenticator)
@@ -70,7 +71,7 @@ def delete_messages (imap_authenticated_connection, rules)
   end
 end
 
-def send_mail_drop_messages (imap_authenticated_connection, smtp_config, days_until_reminder=nil)
+def send_mail_drop_messages (imap_authenticated_connection, smtp_config, days_until_reminder=nil, email_prefix="", reminder_email_prefix="")
   if not imap_authenticated_connection.list('', 'OmniFocus tasks')
     imap_authenticated_connection.create('OmniFocus tasks')
   end
@@ -94,10 +95,12 @@ def send_mail_drop_messages (imap_authenticated_connection, smtp_config, days_un
     puts "#{envelope.from[0].name}: \t#{envelope.subject} -> #{flags.join(", ")}"
     mail = Mail.read_from_string imap_authenticated_connection.uid_fetch(message_id,'RFC822')[0].attr['RFC822']
 
+    email_prefix = "#{reminder_email_prefix} #{email_prefix}" if flags.include?("SentReminderToMailDrop")
+    email_prefix = HTMLEntities.new.decode(email_prefix)
     maildrop_mail = Mail.new do
       to      smtp_config["to_address"]
       from    smtp_config["from_address"]
-      subject "Subject: #{mail.subject}"
+      subject "Subject: #{email_prefix} #{mail.subject}"
     end
 
     text_part_body = ""
@@ -170,7 +173,7 @@ config["accounts"].each do |account|
   mark_as_seen(imap, account["mark_as_seen"]) if account.has_key?("mark_as_seen")
 
   delete_messages(imap, account["delete_messages"]) if account.has_key?("delete_messages")
-  send_mail_drop_messages(imap, config["smtp"], account["days_until_reminder"])
+  send_mail_drop_messages(imap, config["smtp"], account["days_until_reminder"], account["email_prefix"], account["reminder_email_prefix"])
   cleanup_old_maildrop_messages(imap)
   expunge_mailboxes(imap, account["expunge_mailboxes"]) if account.has_key?("expunge_mailboxes")
 

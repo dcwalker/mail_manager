@@ -32,6 +32,7 @@ The file should be named `config.yaml` and should go in the same directory as `M
         expunge_mailboxes:
           - INBOX
           - Sent Messages
+        email_prefix: "Email:"
       - description: Personal mail
         login: espresso
         imap_server: imap.mail.me.com
@@ -60,6 +61,10 @@ The file should be named `config.yaml` and should go in the same directory as `M
 `expunge_mailboxes` _(optional)_ -- Mail.app is lazy about when it actually calls expunge on a folder.  [Status Board](http://panic.com/statusboard/) has a bug where it includes messages marked deleted in its counts of folders.  This option is to work around that.
 
 `days_until_reminder` _(optional)_ -- If a message is still in the "OmniFocus tasks" folder after this many days then send the message again, as a reminder.
+
+`email_prefix` _(optional)_ -- String of text to pre-pend to the email subject.
+
+`reminder_email_prefix` _(optional)_ -- String of text to pre-pend to the email subject in addition to the `email_prefix` (used in combination with `days_until_reminder`).
 
 `smtp` -- The script needs your SMTP credentials so that it can send your tasks to you.
 
