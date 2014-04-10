@@ -141,6 +141,7 @@ def send_mail_drop_messages (imap_authenticated_connection, smtp_config, days_un
     end
 
     imap_authenticated_connection.uid_store(message_id, "+FLAGS", ["SentToMailDrop"])
+    imap_authenticated_connection.uid_store(message_id, "+FLAGS", [:Flagged])
   end
 end
 
@@ -154,6 +155,7 @@ def cleanup_old_maildrop_messages(imap_authenticated_connection)
     imap_authenticated_connection.uid_search(["KEYWORD", "SentToMailDrop"]).each do |message_id|
       imap_authenticated_connection.uid_store(message_id, "-FLAGS", ["SentToMailDrop"])
       imap_authenticated_connection.uid_store(message_id, "-FLAGS", ["SentReminderToMailDrop"])
+      imap_authenticated_connection.uid_store(message_id, "-FLAGS", [:Flagged])
       count =+ 1
     end
     print "(#{count}) "
