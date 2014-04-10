@@ -32,7 +32,8 @@ The file should be named `config.yaml` and should go in the same directory as `M
         expunge_mailboxes:
           - INBOX
           - Sent Messages
-        email_prefix: "Email:"
+        email_prefix: "&#x2709;&#xFE0F;"
+        reminder_email_prefix: "&#x1f6a9;"
       - description: Personal mail
         login: espresso
         imap_server: imap.mail.me.com
