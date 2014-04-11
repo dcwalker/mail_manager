@@ -71,12 +71,18 @@ def delete_messages (imap_authenticated_connection, rules)
   end
 end
 
-def send_mail_drop_messages (imap_authenticated_connection, smtp_config, days_until_reminder=nil, email_prefix="", reminder_email_prefix="")
-  if not imap_authenticated_connection.list('', 'OmniFocus tasks')
-    imap_authenticated_connection.create('OmniFocus tasks')
+def send_mail_drop_messages (imap_authenticated_connection, smtp_config, mailbox_name, days_until_reminder=nil, email_prefix="", reminder_email_prefix="")
+  if not imap_authenticated_connection.list('', mailbox_name)
+    imap_authenticated_connection.create(mailbox_name)
+  elsif imap_authenticated_connection.list("", "#{mailbox_name}/*")
+    imap_authenticated_connection.list(mailbox_name, "*").each do |m|
+      short_name = m.name.split(m.delim).last
+      email_prefix = "#{email_prefix} #{short_name}:"
+      send_mail_drop_messages(imap_authenticated_connection, smtp_config, m.name, days_until_reminder, email_prefix, reminder_email_prefix)
+    end
   end
 
-  imap_authenticated_connection.select('OmniFocus tasks')
+  imap_authenticated_connection.select(mailbox_name)
 
   unless days_until_reminder.nil?
     reminder_date = Date.today - days_until_reminder.to_i
@@ -87,7 +93,7 @@ def send_mail_drop_messages (imap_authenticated_connection, smtp_config, days_un
     end
   end
 
-  puts " Messages in 'OmniFocus tasks' folder to send to MailDrop:"
+  puts " Messages in \'#{mailbox_name}\' folder to send to MailDrop:"
   imap_authenticated_connection.uid_search(["NOT", "KEYWORD", "SentToMailDrop", "NOT", "DELETED"]).each do |message_id|
     flags = imap_authenticated_connection.uid_fetch(message_id, "FLAGS")[0].attr["FLAGS"]
     envelope = imap_authenticated_connection.uid_fetch(message_id, "ENVELOPE")[0].attr["ENVELOPE"]
@@ -96,11 +102,10 @@ def send_mail_drop_messages (imap_authenticated_connection, smtp_config, days_un
     mail = Mail.read_from_string imap_authenticated_connection.uid_fetch(message_id,'RFC822')[0].attr['RFC822']
 
     email_prefix = "#{reminder_email_prefix} #{email_prefix}" if flags.include?("SentReminderToMailDrop")
-    email_prefix = HTMLEntities.new.decode(email_prefix)
     maildrop_mail = Mail.new do
       to      smtp_config["to_address"]
       from    smtp_config["from_address"]
-      subject "Subject: #{email_prefix} #{mail.subject}"
+      subject "Subject: #{HTMLEntities.new.decode(email_prefix)} #{HTMLEntities.new.decode(mail.subject)}"
     end
 
     text_part_body = ""
@@ -148,7 +153,7 @@ end
 def cleanup_old_maildrop_messages(imap_authenticated_connection)
   print " Cleaning flags on previous maildrop messages in: "
   imap_authenticated_connection.list('', '*').each do |mailbox|
-    next if mailbox.name == "OmniFocus tasks"
+    next if mailbox.name.include? "OmniFocus tasks"
     print "#{mailbox.name} "
     imap_authenticated_connection.select(mailbox.name)
     count = 0
@@ -175,7 +180,7 @@ config["accounts"].each do |account|
   mark_as_seen(imap, account["mark_as_seen"]) if account.has_key?("mark_as_seen")
 
   delete_messages(imap, account["delete_messages"]) if account.has_key?("delete_messages")
-  send_mail_drop_messages(imap, config["smtp"], account["days_until_reminder"], account["email_prefix"], account["reminder_email_prefix"])
+  send_mail_drop_messages(imap, config["smtp"], "OmniFocus tasks", account["days_until_reminder"], account["email_prefix"], account["reminder_email_prefix"])
   cleanup_old_maildrop_messages(imap)
   expunge_mailboxes(imap, account["expunge_mailboxes"]) if account.has_key?("expunge_mailboxes")
 
