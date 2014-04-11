@@ -77,8 +77,7 @@ def send_mail_drop_messages (imap_authenticated_connection, smtp_config, mailbox
   elsif imap_authenticated_connection.list("", "#{mailbox_name}/*")
     imap_authenticated_connection.list(mailbox_name, "*").each do |m|
       short_name = m.name.split(m.delim).last
-      email_prefix = "#{email_prefix} #{short_name}:"
-      send_mail_drop_messages(imap_authenticated_connection, smtp_config, m.name, days_until_reminder, email_prefix, reminder_email_prefix)
+      send_mail_drop_messages(imap_authenticated_connection, smtp_config, m.name, days_until_reminder, "#{email_prefix} #{short_name}:", reminder_email_prefix)
     end
   end
 
