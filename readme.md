@@ -64,7 +64,7 @@ The file should be named `config.yaml` and should go in the same directory as `M
 
 `expunge_mailboxes` _(optional)_ -- Mail.app is lazy about when it actually calls expunge on a folder.  [Status Board](http://panic.com/statusboard/) has a bug where it includes messages marked deleted in its counts of folders.  This option is to work around that.
 
-`days_until_reminder` _(optional)_ -- If a message is still in the "OmniFocus tasks" folder after this many days then send the message again, as a reminder.
+`days_until_reminder` _(optional)_ -- If a message is still in the "OmniFocus tasks" folder after this many days then send the message again, as a reminder.  This option can be a single integer or a list of integers if multiple reminders are desired.
 
 `email_prefix` _(optional)_ -- String of text to pre-pend to the email subject.
 
