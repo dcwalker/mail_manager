@@ -136,6 +136,12 @@ def send_mail_drop_messages (imap_authenticated_connection, smtp_config, mailbox
       if !email_body.match(/--.*?Content-Type: text\/html;.*?Content-Transfer-Encoding: base64.*?\r\n\r\n/im).nil?
         html_text = Base64.encode64(html_text)
       end
+      if !email_body.match(/--.*?Content-Type: text\/plain;.*?Content-Transfer-Encoding: quoted-printable.*?\r\n\r\n/im).nil?
+        plain_text = plain_text.insert(73, "=\r\n") if plain_text.length > 74
+      end
+      if !email_body.match(/--.*?Content-Type: text\/html;.*?Content-Transfer-Encoding: quoted-printable.*?\r\n\r\n/im).nil?
+        html_text = html_text.insert(73, "=\r\n") if html_text.length > 74
+      end
       email_body.sub!(/(--#{boundary}.*?Content-Type: text\/plain.*?\r\n\r\n)/im, "\\1#{plain_text}")
       email_body.sub!(/(--#{boundary}.*?Content-Type: text\/html;.*?\r\n\r\n)/im, "\\1#{html_text}")
     end
