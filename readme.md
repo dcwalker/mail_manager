@@ -8,7 +8,7 @@ When you run the script it will check your OS X keychain for login credentials. 
 
 Because of the dependance on the OS X keychain for password management, this needs to run on an OS X machine.
 
-Everything uses native Ruby libraries except my dependance on [mikel's mail gem](https://github.com/mikel/mail) (installed with `gem install htmlentities`).
+Everything uses native Ruby libraries except my dependance on HTMLEntities for the emoji in the email subject (installed with `gem install htmlentities` or [Bundler](http://bundler.io/)).
 
 ## Example configuration
 
