@@ -108,8 +108,8 @@ def send_mail_drop_messages (imap_authenticated_connection, smtp_config, mailbox
     headers_to_forward = imap_authenticated_connection.uid_fetch(message_id,"BODY[HEADER.FIELDS (#{headers_to_forward})]")[0].attr["BODY[HEADER.FIELDS (#{headers_to_forward})]"]
     headers_to_forward = headers_to_forward.strip unless headers_to_forward.nil?
     content_type = imap_authenticated_connection.uid_fetch(message_id,"BODY[HEADER.FIELDS (CONTENT-TYPE)]")[0].attr["BODY[HEADER.FIELDS (CONTENT-TYPE)]"]
-    boundary = content_type.match(/.*boundary=(.*)$/) unless content_type.nil?
-    boundary = boundary[1].gsub!(/\"/, "") if boundary
+    boundary = content_type.match(/.*?boundary=(.*)$/) unless content_type.nil?
+    boundary = boundary[1].gsub(/\"/, "") if boundary
     email_body = imap_authenticated_connection.uid_fetch(message_id,"BODY[TEXT]")[0].attr["BODY[TEXT]"]
 
     subject = envelope.subject
