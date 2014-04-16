@@ -1,9 +1,10 @@
 require 'net/imap'
 require 'net/smtp'
 require 'openssl'
-require 'mail'
 require 'yaml'
 require 'htmlentities'
+require "uri"
+require "base64"
 
 Net::IMAP::add_authenticator('PLAIN', Net::IMAP::PlainAuthenticator)
 Net::IMAP::add_authenticator('LOGIN', Net::IMAP::LoginAuthenticator)
@@ -31,7 +32,6 @@ def verify_smtp_connection(smtp_config)
   smtp.start(smtp_config["helo_domain"], smtp_config["username"], get_password_from_keychain(smtp_config["server"], smtp_config["username"]), :plain) do |smtp|
   end
 end
-
 
 def mark_as_seen (imap_authenticated_connection, mailboxes)
   print " Marking messages as \"Seen\" in: "
@@ -103,52 +103,58 @@ def send_mail_drop_messages (imap_authenticated_connection, smtp_config, mailbox
     envelope = imap_authenticated_connection.uid_fetch(message_id, "ENVELOPE")[0].attr["ENVELOPE"]
     print "  (#{message_id}) "
     puts "#{envelope.from[0].name}: \t#{envelope.subject} -> #{flags.join(", ")}"
-    mail = Mail.read_from_string imap_authenticated_connection.uid_fetch(message_id,'RFC822')[0].attr['RFC822']
 
-    email_prefix = "#{reminder_email_prefix} #{email_prefix}" if flags.include?("SentReminderToMailDrop")
-    maildrop_mail = Mail.new do
-      to      smtp_config["to_address"]
-      from    smtp_config["from_address"]
-      subject "Subject: #{HTMLEntities.new.decode(email_prefix)} #{HTMLEntities.new.decode(mail.subject)}"
+    headers_to_forward = "CONTENT-TYPE CONTENT-TRANSFER-ENCODING"
+    headers_to_forward = imap_authenticated_connection.uid_fetch(message_id,"BODY[HEADER.FIELDS (#{headers_to_forward})]")[0].attr["BODY[HEADER.FIELDS (#{headers_to_forward})]"]
+    headers_to_forward = headers_to_forward.strip unless headers_to_forward.nil?
+    content_type = imap_authenticated_connection.uid_fetch(message_id,"BODY[HEADER.FIELDS (CONTENT-TYPE)]")[0].attr["BODY[HEADER.FIELDS (CONTENT-TYPE)]"]
+    boundary = content_type.match(/.*boundary=(.*)$/) unless content_type.nil?
+    boundary = boundary[1].gsub!(/\"/, "") if boundary
+    email_body = imap_authenticated_connection.uid_fetch(message_id,"BODY[TEXT]")[0].attr["BODY[TEXT]"]
+
+    subject = envelope.subject
+    subject.slice!(/Subject:\s/i)
+    subject.gsub!(/=\?.*?\?Q\?/, "")
+    subject.gsub!(/\?=/, "")
+    subject.gsub!(/\?/, "=3f")
+    if flags.include?("SentReminderToMailDrop")
+      subject = "#{reminder_email_prefix} #{email_prefix} #{subject}"
+    else
+      subject = "#{email_prefix} #{subject}"
     end
 
-    text_part_body = ""
-    html_part_body = ""
-    content_type = ""
-    if mail.multipart?
-      mail.parts.each do |part|
-        if part.content_type.start_with? "text/plain"
-          text_part_body += part.body.to_s
-          content_type = part.content_type
-        elsif part.content_type.start_with? "text/html"
-          html_part_body += part.body.to_s
-          content_type ||= part.content_type
-        elsif !part.filename.nil?
-         maildrop_mail.attachments[part.filename] = { :content => part.body.to_s }
-        else
-          text_part_body += "could not parse: #{part.inspect}"
-        end
+    message_id_url = envelope.message_id.sub(/<(.*)\>/i, "message:%3C\\1%3E <message:%3C\\1%3E>")
+    plain_text = "#{message_id_url}\r\n\r\n"
+    html_text = "#{message_id_url}<br>\r\n<br>\r\n"
+    if boundary.nil?
+      if content_type.include?("html")
+        email_body = "#{html_text}#{email_body}"
+      else
+        email_body = "#{plain_text}#{email_body}"
       end
     else
-      text_part_body = mail.body
-      content_type = mail.content_type
+      if !email_body.match(/--.*?Content-Type: text\/html;.*?Content-Transfer-Encoding: base64.*?\r\n\r\n/im).nil?
+        html_text = Base64.encode64(html_text)
+      end
+      email_body.sub!(/(--#{boundary}.*?Content-Type: text\/plain.*?\r\n\r\n)/im, "\\1#{plain_text}")
+      email_body.sub!(/(--#{boundary}.*?Content-Type: text\/html;.*?\r\n\r\n)/im, "\\1#{html_text}")
     end
 
-    text_part = Mail::Part.new do
-      content_type = (content_type.nil? || content_type.empty?) ? "text/plain; charset=UTF-8" : content_type
-      content_type content_type
-      text = text_part_body.empty? ? html_part_body : text_part_body
-      body "message:<#{mail.message_id}>\n\n#{text}\n"
-    end
-    maildrop_mail.text_part = text_part
-    maildrop_mail.charset = mail.charset unless mail.charset.nil?
+    message_string = <<END_OF_MESSAGE
+#{headers_to_forward}
+Date: #{envelope.date}
+From: #{smtp_config["from_address"]}
+To: #{smtp_config["to_address"]}
+Subject: =?UTF-8?Q?#{URI.escape(HTMLEntities.new.decode(subject)).gsub(/%/, "=")}?=
+
+#{email_body}
+END_OF_MESSAGE
 
     smtp = Net::SMTP.new(smtp_config["server"], 587)
     smtp.enable_starttls
     smtp.start(smtp_config["helo_domain"], smtp_config["username"], get_password_from_keychain(smtp_config["server"], smtp_config["username"]), :plain) do |smtp|
-      smtp.send_message maildrop_mail.to_s, smtp_config["from_address"], smtp_config["to_address"]
+      smtp.send_message message_string, smtp_config["from_address"], smtp_config["to_address"]
     end
-
     imap_authenticated_connection.uid_store(message_id, "+FLAGS", ["SentToMailDrop"])
     imap_authenticated_connection.uid_store(message_id, "+FLAGS", [:Flagged])
   end
