@@ -34,6 +34,7 @@ The file should be named `config.yaml` and should go in the same directory as `M
           - Sent Messages
         email_prefix: "&#x2709;&#xFE0F;"
         reminder_email_prefix: "&#x1f6a9;"
+        days_until_reminder: 3
       - description: Personal mail
         login: espresso
         imap_server: imap.mail.me.com
@@ -41,7 +42,9 @@ The file should be named `config.yaml` and should go in the same directory as `M
           - Deleted Messages
           - Archive
           - Sent Messages
-        days_until_reminder: 3
+        days_until_reminder:
+          - 3
+          - 7
 
     smtp:
       to_address: maildrop_user@sync.omnigroup.com

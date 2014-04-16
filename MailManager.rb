@@ -84,11 +84,16 @@ def send_mail_drop_messages (imap_authenticated_connection, smtp_config, mailbox
   imap_authenticated_connection.select(mailbox_name)
 
   unless days_until_reminder.nil?
-    reminder_date = Date.today - days_until_reminder.to_i
-    puts " Sending reminder tasks for messages before #{reminder_date.strftime("%d-%b-%Y")}"
-    imap_authenticated_connection.uid_search(["KEYWORD", "SentToMailDrop", "NOT", "KEYWORD", "SentReminderToMailDrop", "NOT", "DELETED", "BEFORE", reminder_date.strftime("%d-%b-%Y")]).each do |message_id|
-      imap_authenticated_connection.uid_store(message_id, "+FLAGS", ["SentReminderToMailDrop"])
-      imap_authenticated_connection.uid_store(message_id, "-FLAGS", ["SentToMailDrop"])
+    unless days_until_reminder.is_a? Array
+      days_until_reminder = [days_until_reminder]
+    end
+    days_until_reminder.each do |days|
+      reminder_date = Date.today - days.to_i
+      puts " Sending reminder tasks for messages before #{reminder_date.strftime("%d-%b-%Y")}"
+      imap_authenticated_connection.uid_search(["KEYWORD", "SentToMailDrop", "NOT", "KEYWORD", "SentReminderToMailDrop", "NOT", "DELETED", "BEFORE", reminder_date.strftime("%d-%b-%Y")]).each do |message_id|
+        imap_authenticated_connection.uid_store(message_id, "+FLAGS", ["SentReminderToMailDrop"])
+        imap_authenticated_connection.uid_store(message_id, "-FLAGS", ["SentToMailDrop"])
+      end
     end
   end
 
