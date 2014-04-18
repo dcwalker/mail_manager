@@ -45,6 +45,10 @@ The file should be named `config.yaml` and should go in the same directory as `M
         days_until_reminder:
           - 3
           - 7
+        subject_scrub_words:
+          - "re:"
+          - "fwd:"
+
 
     smtp:
       to_address: maildrop_user@sync.omnigroup.com
@@ -69,6 +73,8 @@ The file should be named `config.yaml` and should go in the same directory as `M
 `email_prefix` _(optional)_ -- String of text to pre-pend to the email subject.
 
 `reminder_email_prefix` _(optional)_ -- String of text to pre-pend to the email subject in addition to the `email_prefix` (used in combination with `days_until_reminder`).
+
+`subject_scrub_words` _(optional)_ -- A list of strings that are automatically filtered out of the email subject before being sent to the `to_address`.
 
 `smtp` -- The script needs your SMTP credentials so that it can send your tasks to you.
 

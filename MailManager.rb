@@ -71,13 +71,13 @@ def delete_messages (imap_authenticated_connection, rules)
   end
 end
 
-def send_mail_drop_messages (imap_authenticated_connection, smtp_config, mailbox_name, days_until_reminder=nil, email_prefix="", reminder_email_prefix="")
+def send_mail_drop_messages (imap_authenticated_connection, smtp_config, mailbox_name, days_until_reminder=nil, email_prefix="", reminder_email_prefix="", subject_scrub_words=[])
   if not imap_authenticated_connection.list('', mailbox_name)
     imap_authenticated_connection.create(mailbox_name)
   elsif imap_authenticated_connection.list("", "#{mailbox_name}/*")
     imap_authenticated_connection.list(mailbox_name, "*").each do |m|
       short_name = m.name.split(m.delim).last
-      send_mail_drop_messages(imap_authenticated_connection, smtp_config, m.name, days_until_reminder, "#{email_prefix} #{short_name}:", reminder_email_prefix)
+      send_mail_drop_messages(imap_authenticated_connection, smtp_config, m.name, days_until_reminder, "#{email_prefix} #{short_name}:", reminder_email_prefix, subject_scrub_words)
     end
   end
 
@@ -114,8 +114,11 @@ def send_mail_drop_messages (imap_authenticated_connection, smtp_config, mailbox
 
     subject = envelope.subject
     subject.slice!(/Subject:\s/i)
-    subject.gsub!(/=\?.*?\?Q\?/, "")
-    subject.gsub!(/\?=/, "")
+    subject_scrub_words.each do |word|
+      subject.slice!(/#{word}\s*/i)
+    end
+    subject.slice!(/=\?.*?\?Q\?/)
+    subject.slice!(/\?=/)
     subject.gsub!(/\?/, "=3f")
     if flags.include?("SentReminderToMailDrop")
       subject = "#{reminder_email_prefix} #{email_prefix} #{subject}"
@@ -196,7 +199,7 @@ config["accounts"].each do |account|
   mark_as_seen(imap, account["mark_as_seen"]) if account.has_key?("mark_as_seen")
 
   delete_messages(imap, account["delete_messages"]) if account.has_key?("delete_messages")
-  send_mail_drop_messages(imap, config["smtp"], "OmniFocus tasks", account["days_until_reminder"], account["email_prefix"], account["reminder_email_prefix"])
+  send_mail_drop_messages(imap, config["smtp"], "OmniFocus tasks", account["days_until_reminder"], account["email_prefix"], account["reminder_email_prefix"], account["subject_scrub_words"])
   cleanup_old_maildrop_messages(imap)
   expunge_mailboxes(imap, account["expunge_mailboxes"]) if account.has_key?("expunge_mailboxes")
 
