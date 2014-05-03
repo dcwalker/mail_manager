@@ -107,8 +107,9 @@ def send_mail_drop_messages (imap_authenticated_connection, smtp_config, mailbox
     headers_to_forward = "CONTENT-TYPE CONTENT-TRANSFER-ENCODING"
     headers_to_forward = imap_authenticated_connection.uid_fetch(message_id,"BODY[HEADER.FIELDS (#{headers_to_forward})]")[0].attr["BODY[HEADER.FIELDS (#{headers_to_forward})]"]
     headers_to_forward = headers_to_forward.strip unless headers_to_forward.nil?
+    content_transfer_encoding = imap_authenticated_connection.uid_fetch(message_id,"BODY[HEADER.FIELDS (CONTENT-TRANSFER-ENCODING)]")[0].attr["BODY[HEADER.FIELDS (CONTENT-TRANSFER-ENCODING)]"]
     content_type = imap_authenticated_connection.uid_fetch(message_id,"BODY[HEADER.FIELDS (CONTENT-TYPE)]")[0].attr["BODY[HEADER.FIELDS (CONTENT-TYPE)]"]
-    boundary = content_type.match(/.*?boundary=(.*)$/) unless content_type.nil?
+    boundary = content_type.match(/.*?boundary=(.*?)(?:;|$)/) unless content_type.nil?
     boundary = boundary[1].gsub(/\"/, "") if boundary
     email_body = imap_authenticated_connection.uid_fetch(message_id,"BODY[TEXT]")[0].attr["BODY[TEXT]"]
 
@@ -130,23 +131,26 @@ def send_mail_drop_messages (imap_authenticated_connection, smtp_config, mailbox
     plain_text = "#{message_id_url}\r\n\r\n"
     html_text = "#{message_id_url}<br>\r\n<br>\r\n"
     if boundary.nil?
+      if content_transfer_encoding.include?("quoted-printable")
+        plain_text = plain_text.length > 74 ? plain_text.insert(73, "=\r\n") : plain_text
+        html_text = html_text.length > 74 ? html_text.insert(73, "=\r\n") : html_text
+      end
       if content_type.include?("html")
         email_body = "#{html_text}#{email_body}"
       else
         email_body = "#{plain_text}#{email_body}"
       end
     else
-      if !email_body.match(/--.*?Content-Type: text\/html;.*?Content-Transfer-Encoding: base64.*?\r\n\r\n/im).nil?
-        html_text = Base64.encode64(html_text)
-      end
-      if !email_body.match(/--.*?Content-Type: text\/plain;.*?Content-Transfer-Encoding: quoted-printable.*?\r\n\r\n/im).nil?
-        plain_text = plain_text.insert(73, "=\r\n") if plain_text.length > 74
-      end
-      if !email_body.match(/--.*?Content-Type: text\/html;.*?Content-Transfer-Encoding: quoted-printable.*?\r\n\r\n/im).nil?
-        html_text = html_text.insert(73, "=\r\n") if html_text.length > 74
-      end
-      email_body.sub!(/(--#{boundary}.*?Content-Type: text\/plain.*?\r\n\r\n)/im, "\\1#{plain_text}")
-      email_body.sub!(/(--#{boundary}.*?Content-Type: text\/html;.*?\r\n\r\n)/im, "\\1#{html_text}")
+      plain_text_qp = plain_text.length > 74 ? plain_text.insert(73, "=\r\n") : plain_text
+      html_text_qp = html_text.length > 74 ? html_text.insert(73, "=\r\n") : html_text
+
+      # Content-Transfer-Encoding := "BASE64" / "QUOTED-PRINTABLE" / "8BIT" / "7BIT" / "BINARY" / x-token
+      # http://www.w3.org/Protocols/rfc1341/5_Content-Transfer-Encoding.html
+      email_body.sub!(/(--#{boundary}.*?Content-Type: text\/plain.*?Content-Transfer-Encoding: quoted-printable.*?\r\n\r\n)/im, "\\1#{plain_text_qp}")
+      email_body.sub!(/(--#{boundary}.*?Content-Type: text\/html;.*?Content-Transfer-Encoding: quoted-printable.*?\r\n\r\n)/im, "\\1#{html_text_qp}")
+      email_body.sub!(/(--#{boundary}.*?Content-Type: text\/plain.*?Content-Transfer-Encoding: 7bit.*?\r\n\r\n)/im, "\\1#{plain_text}")
+      email_body.sub!(/(--#{boundary}.*?Content-Type: text\/html;.*?Content-Transfer-Encoding: 7bit.*?\r\n\r\n)/im, "\\1#{html_text}")
+      email_body.sub!(/(--#{boundary}.*?Content-Type: text\/html;.*?Content-Transfer-Encoding: base64.*?\r\n\r\n)/im, "\\1#{Base64.encode64(html_text)}")
     end
 
     message_string = <<END_OF_MESSAGE
