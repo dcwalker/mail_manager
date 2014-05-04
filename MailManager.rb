@@ -99,6 +99,12 @@ def send_mail_drop_messages (imap_authenticated_connection, smtp_config, mailbox
 
   puts " Messages in \'#{mailbox_name}\' folder to send to MailDrop:"
   imap_authenticated_connection.uid_search(["NOT", "KEYWORD", "SentToMailDrop", "NOT", "DELETED"]).each do |message_id|
+
+    if mailbox_name.include?("Reply to")
+        imap_authenticated_connection.uid_store(message_id, "-FLAGS", [:Answered])
+        imap_authenticated_connection.uid_store(message_id, "-FLAGS", ["\$Forwarded"])
+    end
+
     flags = imap_authenticated_connection.uid_fetch(message_id, "FLAGS")[0].attr["FLAGS"]
     envelope = imap_authenticated_connection.uid_fetch(message_id, "ENVELOPE")[0].attr["ENVELOPE"]
     print "  (#{message_id}) "
@@ -176,6 +182,16 @@ end
 def cleanup_old_maildrop_messages(imap_authenticated_connection)
   print " Cleaning flags on previous maildrop messages in: "
   imap_authenticated_connection.list('', '*').each do |mailbox|
+    if mailbox.name.include?("Reply to")
+      print "#{mailbox.name} "
+      imap_authenticated_connection.select(mailbox.name)
+      count = 0
+      imap_authenticated_connection.uid_search(["KEYWORD", "SentToMailDrop", "ANSWERED", "NOT", "DELETED"]).each do |message_id|
+        imap_authenticated_connection.uid_store(message_id, "-FLAGS", [:Flagged])
+        count =+ 1
+      end
+      print "(#{count}) "
+    end
     next if mailbox.name.include? "OmniFocus tasks"
     print "#{mailbox.name} "
     imap_authenticated_connection.select(mailbox.name)
