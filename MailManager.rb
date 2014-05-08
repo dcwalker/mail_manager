@@ -212,7 +212,7 @@ config = YAML.load_file(File.join(File.expand_path(File.dirname(__FILE__)), "con
 verify_smtp_connection(config["smtp"])
 
 config["accounts"].each do |account|
-  puts "Processing #{account["description"]}"
+  puts "Processing #{account["description"]} at #{Time.now}"
   imap = Net::IMAP.new(account["imap_server"], :ssl => true)
   imap.login(account["login"], get_password_from_keychain(account["imap_server"], account["login"]))
 

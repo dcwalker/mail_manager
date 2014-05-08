@@ -4,3 +4,5 @@
 *.yaml
 
 *.lock
+
+*.log
