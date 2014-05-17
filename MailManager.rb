@@ -132,10 +132,8 @@ def send_mail_drop_messages (imap_authenticated_connection, smtp_config, mailbox
     else
       subject = "#{email_prefix} #{subject}"
     end
-
-    message_id_url = envelope.message_id.sub(/<(.*)\>/i, "message:&lt;\\1&gt; <message:%3C\\1%3E>")
-    plain_text = "#{message_id_url}\r\n\r\n"
-    html_text = "#{message_id_url}<br>\r\n<br>\r\n"
+    plain_text = envelope.message_id.sub(/<(.*)\>/i, "message://%3C\\1%3E\r\n\r\n")
+    html_text = envelope.message_id.sub(/<(.*)\>/i, "message:&lt;\\1&gt; <message://%3C\\1%3E>\r\n<br>\r\n<br>\r\n")
     if boundary.nil?
       if content_transfer_encoding.include?("quoted-printable")
         plain_text = plain_text.length > 74 ? plain_text.insert(73, "=\r\n") : plain_text
