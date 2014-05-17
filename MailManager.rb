@@ -112,7 +112,7 @@ def send_mail_drop_messages (imap_authenticated_connection, smtp_config, mailbox
 
     headers_to_forward = "CONTENT-TYPE CONTENT-TRANSFER-ENCODING"
     headers_to_forward = imap_authenticated_connection.uid_fetch(message_id,"BODY[HEADER.FIELDS (#{headers_to_forward})]")[0].attr["BODY[HEADER.FIELDS (#{headers_to_forward})]"]
-    headers_to_forward = headers_to_forward.strip unless headers_to_forward.nil?
+    headers_to_forward = (headers_to_forward.nil? || headers_to_forward == "\r\n") ? "content-type: text/plain;\r\ncontent-transfer-encoding: 7bit" : headers_to_forward.strip
     content_transfer_encoding = imap_authenticated_connection.uid_fetch(message_id,"BODY[HEADER.FIELDS (CONTENT-TRANSFER-ENCODING)]")[0].attr["BODY[HEADER.FIELDS (CONTENT-TRANSFER-ENCODING)]"]
     content_type = imap_authenticated_connection.uid_fetch(message_id,"BODY[HEADER.FIELDS (CONTENT-TYPE)]")[0].attr["BODY[HEADER.FIELDS (CONTENT-TYPE)]"]
     boundary = content_type.match(/.*?boundary=(.*?)(?:;|$)/) unless content_type.nil?
