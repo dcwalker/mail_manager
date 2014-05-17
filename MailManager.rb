@@ -145,16 +145,28 @@ def send_mail_drop_messages (imap_authenticated_connection, smtp_config, mailbox
         email_body = "#{plain_text}#{email_body}"
       end
     else
-      plain_text_qp = plain_text.length > 74 ? plain_text.insert(73, "=\r\n") : plain_text
-      html_text_qp = html_text.length > 74 ? html_text.insert(73, "=\r\n") : html_text
-
       # Content-Transfer-Encoding := "BASE64" / "QUOTED-PRINTABLE" / "8BIT" / "7BIT" / "BINARY" / x-token
       # http://www.w3.org/Protocols/rfc1341/5_Content-Transfer-Encoding.html
-      email_body.sub!(/(--#{boundary}.*?Content-Type: text\/plain.*?Content-Transfer-Encoding: quoted-printable.*?\r\n\r\n)/im, "\\1#{plain_text_qp}")
-      email_body.sub!(/(--#{boundary}.*?Content-Type: text\/html;.*?Content-Transfer-Encoding: quoted-printable.*?\r\n\r\n)/im, "\\1#{html_text_qp}")
-      email_body.sub!(/(--#{boundary}.*?Content-Type: text\/plain.*?Content-Transfer-Encoding: 7bit.*?\r\n\r\n)/im, "\\1#{plain_text}")
-      email_body.sub!(/(--#{boundary}.*?Content-Type: text\/html;.*?Content-Transfer-Encoding: 7bit.*?\r\n\r\n)/im, "\\1#{html_text}")
-      email_body.sub!(/(--#{boundary}.*?Content-Type: text\/html;.*?Content-Transfer-Encoding: base64.*?\r\n\r\n)/im, "\\1#{Base64.encode64(html_text)}")
+      email_body.sub!(/(--#{boundary}.*?Content-Type: text\/plain.*?\r\n\r\n)/im) do |match|
+        if match.downcase.include? "content-transfer-encoding: quoted-printable"
+          "#{$1}#{plain_text.length > 74 ? plain_text.insert(73, "=\r\n") : plain_text }"
+        elsif match.downcase.include? "content-transfer-encoding: 7bit"
+          "#{$1}#{plain_text}"
+        else
+          "#{$1}"
+        end
+      end
+      email_body.sub!(/(--#{boundary}.*?Content-Type: text\/html.*?\r\n\r\n)/im) do |match|
+        if match.downcase.include? "content-transfer-encoding: quoted-printable" and match.downcase.include? "content-type: text\/html"
+          "#{$1}#{html_text.length > 74 ? html_text.insert(73, "=\r\n") : html_text }"
+        elsif match.downcase.include? "content-transfer-encoding: 7bit" and match.downcase.include? "content-type: text\/html"
+          "#{$1}#{html_text}"
+        elsif match.downcase.include? "content-transfer-encoding: base64" and match.downcase.include? "content-type: text\/html"
+          "#{$1}#{Base64.encode64(html_text)}"
+        else
+          "#{$1}"
+        end
+      end
     end
 
     message_string = <<END_OF_MESSAGE
