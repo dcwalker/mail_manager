@@ -161,6 +161,9 @@ def send_mail_drop_messages (imap_authenticated_connection, smtp_config, mailbox
     subject.slice!(/=\?.*?\?Q\?/)
     subject.slice!(/\?=/)
     subject.gsub!(/\?/, "=3f")
+    if mailbox_name.include?("Reply to") and not envelope.from[0].name.empty?
+      email_prefix.gsub!(/:$/, " #{envelope.from[0].name} regarding:")
+    end
     if flags.include?("SentReminderToMailDrop")
       subject = "#{reminder_email_prefix} #{email_prefix} #{subject}"
     else
