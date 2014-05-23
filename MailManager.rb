@@ -81,9 +81,10 @@ def process_multipart_sections (boundary, email_body, plain_message_url, html_me
     boundary_body = segment
     boundary_body.slice!(/#{Regexp.escape(boundary_header)}/im)
 
-    unless boundary_header.match(/.*?boundary=(.*?)(?:;|$)/im).nil?
+		sub_boundary = boundary_header.match(/.*?boundary=(.*?)(?:;|$)/im)
+    unless sub_boundary.nil?
       sub_boundary = sub_boundary[1].gsub(/\"/, "").chomp
-      email_body.sub!(/(#{Regexp.escape(boundary_body)})/im, process_multipart_sections(sub_boundary, boundary_body, plain_text, html_text))
+      email_body.sub!(/(#{Regexp.escape(boundary_body)})/im, process_multipart_sections(sub_boundary, boundary_body, plain_message_url, html_message_url))
     else
       message_url = plain_message_url
       message_url = html_message_url if boundary_header.downcase.include?("content-type: text/html")
