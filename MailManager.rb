@@ -71,6 +71,40 @@ def delete_messages (imap_authenticated_connection, rules)
   end
 end
 
+def process_multipart_sections (boundary, email_body, plain_message_url, html_message_url)
+  # Content-Transfer-Encoding := "BASE64" / "QUOTED-PRINTABLE" / "8BIT" / "7BIT" / "BINARY" / x-token
+  # http://www.w3.org/Protocols/rfc1341/5_Content-Transfer-Encoding.html
+  email_body.split(/--#{boundary}\r\n/m).each do |segment|
+    next if segment.empty?
+    boundary_header = StringScanner.new(segment).scan_until(/\r\n\r\n/)
+    next if boundary_header.nil?
+    boundary_body = segment
+    boundary_body.slice!(/#{Regexp.escape(boundary_header)}/im)
+
+    unless boundary_header.match(/.*?boundary=(.*?)(?:;|$)/im).nil?
+      sub_boundary = sub_boundary[1].gsub(/\"/, "").chomp
+      email_body.sub!(/(#{Regexp.escape(boundary_body)})/im, process_multipart_sections(sub_boundary, boundary_body, plain_text, html_text))
+    else
+      message_url = plain_message_url
+      message_url = html_message_url if boundary_header.downcase.include?("content-type: text/html")
+
+      if boundary_header.downcase.include? "content-transfer-encoding: quoted-printable"
+        message_url.gsub!(/=/, "=3d")
+        message_url = message_url.length > 74 ? message_url.insert(73, "=\r\n") : message_url
+      end
+
+      email_body.sub!(/(#{Regexp.escape(boundary_body)})/im) { |match|
+        if boundary_header.downcase.include? "content-transfer-encoding: base64"
+          "#{Base64.encode64("#{message_url}#{Base64.decode64(boundary_body)}")}"
+        else
+          "#{message_url}#{boundary_body}"
+        end
+      }
+    end
+  end
+  return email_body
+end
+
 def send_mail_drop_messages (imap_authenticated_connection, smtp_config, mailbox_name, days_until_reminder=nil, email_prefix="", reminder_email_prefix="", subject_scrub_words=[])
   if not imap_authenticated_connection.list('', mailbox_name)
     imap_authenticated_connection.create(mailbox_name)
@@ -116,7 +150,7 @@ def send_mail_drop_messages (imap_authenticated_connection, smtp_config, mailbox
     content_transfer_encoding = imap_authenticated_connection.uid_fetch(message_id,"BODY[HEADER.FIELDS (CONTENT-TRANSFER-ENCODING)]")[0].attr["BODY[HEADER.FIELDS (CONTENT-TRANSFER-ENCODING)]"]
     content_type = imap_authenticated_connection.uid_fetch(message_id,"BODY[HEADER.FIELDS (CONTENT-TYPE)]")[0].attr["BODY[HEADER.FIELDS (CONTENT-TYPE)]"]
     boundary = content_type.match(/.*?boundary=(.*?)(?:;|$)/) unless content_type.nil?
-    boundary = boundary[1].gsub(/\"/, "") if boundary
+    boundary = boundary[1].gsub(/\"/, "").chomp if boundary
     email_body = imap_authenticated_connection.uid_fetch(message_id,"BODY[TEXT]")[0].attr["BODY[TEXT]"]
 
     subject = envelope.subject
@@ -136,37 +170,20 @@ def send_mail_drop_messages (imap_authenticated_connection, smtp_config, mailbox
     html_text = envelope.message_id.sub(/<(.*)\>/i, "message:&lt;\\1&gt; <message://%3C\\1%3E>\r\n<br>\r\n<br>\r\n")
     if boundary.nil?
       if content_transfer_encoding.include?("quoted-printable")
-        plain_text = plain_text.length > 74 ? plain_text.insert(73, "=\r\n") : plain_text
-        html_text = html_text.length > 74 ? html_text.insert(73, "=\r\n") : html_text
+        plain_text = plain_text.gsub(/=/, "=3d").length > 74 ? plain_text.gsub(/=/, "=3d").insert(73, "=\r\n") : plain_text.gsub(/=/, "=3d")
+        html_text = html_text.gsub(/=/, "=3d").length > 74 ? html_text.gsub(/=/, "=3d").insert(73, "=\r\n") : html_text.gsub(/=/, "=3d")
       end
-      if content_type.include?("html")
+      if content_type.include?("html") and content_transfer_encoding.include?("base64")
+        email_body = Base64.encode64("#{html_text}#{Base64.decode64(email_body)}")
+      elsif content_type.include?("html")
         email_body = "#{html_text}#{email_body}"
+      elsif content_type.include?("plain") and content_transfer_encoding.include?("base64")
+        email_body = Base64.encode64("#{plain_text}#{Base64.decode64(email_body)}")
       else
         email_body = "#{plain_text}#{email_body}"
       end
     else
-      # Content-Transfer-Encoding := "BASE64" / "QUOTED-PRINTABLE" / "8BIT" / "7BIT" / "BINARY" / x-token
-      # http://www.w3.org/Protocols/rfc1341/5_Content-Transfer-Encoding.html
-      email_body.sub!(/(--#{boundary}.*?Content-Type: text\/plain.*?\r\n\r\n)/im) do |match|
-        if match.downcase.include? "content-transfer-encoding: quoted-printable"
-          "#{$1}#{plain_text.length > 74 ? plain_text.insert(73, "=\r\n") : plain_text }"
-        elsif match.downcase.include? "content-transfer-encoding: 7bit"
-          "#{$1}#{plain_text}"
-        else
-          "#{$1}"
-        end
-      end
-      email_body.sub!(/(--#{boundary}.*?Content-Type: text\/html.*?\r\n\r\n)/im) do |match|
-        if match.downcase.include? "content-transfer-encoding: quoted-printable" and match.downcase.include? "content-type: text\/html"
-          "#{$1}#{html_text.length > 74 ? html_text.insert(73, "=\r\n") : html_text }"
-        elsif match.downcase.include? "content-transfer-encoding: 7bit" and match.downcase.include? "content-type: text\/html"
-          "#{$1}#{html_text}"
-        elsif match.downcase.include? "content-transfer-encoding: base64" and match.downcase.include? "content-type: text\/html"
-          "#{$1}#{Base64.encode64(html_text)}"
-        else
-          "#{$1}"
-        end
-      end
+      email_body = process_multipart_sections(boundary, email_body, plain_text, html_text)
     end
 
     message_string = <<END_OF_MESSAGE
@@ -178,7 +195,6 @@ Subject: =?UTF-8?Q?#{URI.escape(HTMLEntities.new.decode(subject)).gsub(/%/, "=")
 
 #{email_body}
 END_OF_MESSAGE
-
     smtp = Net::SMTP.new(smtp_config["server"], 587)
     smtp.enable_starttls
     smtp.start(smtp_config["helo_domain"], smtp_config["username"], get_password_from_keychain(smtp_config["server"], smtp_config["username"]), :plain) do |smtp|
