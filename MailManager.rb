@@ -86,8 +86,13 @@ def process_multipart_sections (boundary, email_body, plain_message_url, html_me
       sub_boundary = sub_boundary[1].gsub(/\"/, "").chomp
       email_body.sub!(/(#{Regexp.escape(boundary_body)})/im, process_multipart_sections(sub_boundary, boundary_body, plain_message_url, html_message_url))
     else
-      message_url = plain_message_url
-      message_url = html_message_url if boundary_header.downcase.include?("content-type: text/html")
+      if boundary_header.downcase.include?("content-type: text/plain")
+        message_url = plain_message_url
+      elsif boundary_header.downcase.include?("content-type: text/html")
+        message_url = html_message_url
+      else
+        next
+      end
 
       if boundary_header.downcase.include? "content-transfer-encoding: quoted-printable"
         message_url.gsub!(/=/, "=3d")
