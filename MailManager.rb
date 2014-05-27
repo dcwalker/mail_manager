@@ -170,8 +170,8 @@ def send_mail_drop_messages (imap_authenticated_connection, smtp_config, mailbox
     if mailbox_name.include?("Reply to") and not envelope.from[0].name.empty?
       subject.sub!(/Reply to:/, "Reply to #{envelope.from[0].name} regarding:")
     end
-    plain_text = envelope.message_id.sub(/<(.*)\>/i, "message:<\\1>\r\n\r\n")
-    html_text = envelope.message_id.sub(/<(.*)\>/i, "message:&lt;\\1&gt;\r\n<br>\r\n<br>\r\n")
+    plain_text = envelope.message_id.sub(/<(.*)\>/i, "\r\nmessage:<\\1>\r\n\r\n")
+    html_text = envelope.message_id.sub(/<(.*)\>/i, "\r\n<br>message:&lt;\\1&gt;\r\n<br>\r\n<br>\r\n")
 
     if boundary.nil?
       if content_transfer_encoding.include?("quoted-printable")
@@ -200,6 +200,7 @@ Subject: =?UTF-8?Q?#{URI.escape(HTMLEntities.new.decode(subject)).gsub(/%/, "=")
 
 #{email_body}
 END_OF_MESSAGE
+
     smtp = Net::SMTP.new(smtp_config["server"], 587)
     smtp.enable_starttls
     smtp.start(smtp_config["helo_domain"], smtp_config["username"], get_password_from_keychain(smtp_config["server"], smtp_config["username"]), :plain) do |smtp|
