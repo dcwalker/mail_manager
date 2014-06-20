@@ -1,0 +1,10 @@
+GEM
+  remote: http://rubygems.org/
+  specs:
+    htmlentities (4.3.1)
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  htmlentities (~> 4.3.1)

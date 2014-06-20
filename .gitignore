@@ -1,8 +1,3 @@
-
 *.plist
-
 *.yaml
-
-*.lock
-
 *.log
