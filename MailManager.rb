@@ -117,7 +117,7 @@ def send_mail_drop_messages (imap_authenticated_connection, smtp_config, mailbox
   elsif imap_authenticated_connection.list("", "#{mailbox_name}/*")
     imap_authenticated_connection.list(mailbox_name, "*").each do |m|
       short_name = m.name.split(m.delim).last
-      send_mail_drop_messages(imap_authenticated_connection, smtp_config, m.name, days_until_reminder, "#{email_prefix} #{short_name}:", reminder_email_prefix, subject_scrub_words)
+      send_mail_drop_messages(imap_authenticated_connection, smtp_config, m.name, days_until_reminder, "#{email_prefix} #{short_name}:\n", reminder_email_prefix, subject_scrub_words)
     end
   end
 
@@ -159,7 +159,7 @@ def send_mail_drop_messages (imap_authenticated_connection, smtp_config, mailbox
     boundary = boundary[1].gsub(/\"/, "").chomp if boundary
     email_body = imap_authenticated_connection.uid_fetch(message_id,"BODY[TEXT]")[0].attr["BODY[TEXT]"]
 
-    subject = envelope.subject
+    subject = "#{envelope.subject}"
     subject.slice!(/Subject:\s/i)
     subject_scrub_words.each do |word|
       subject.slice!(/#{word}\s*/i)
@@ -167,21 +167,21 @@ def send_mail_drop_messages (imap_authenticated_connection, smtp_config, mailbox
     subject.slice!(/=\?.*?\?Q\?/)
     subject.slice!(/\?=/)
     subject.gsub!(/\?/, "=3f")
+    subject.insert(0, "Subject: ")
+    subject.insert(-1, "\nFrom: #{envelope.from[0].name.nil? ? envelope.from[0].mailbox : envelope.from[0].name}")
+    subject.insert(-1, "\nTo: #{envelope.to.collect {|address| address.name.nil? ? address.mailbox : address.name.sub(/^'/, "").sub(/'$/, "")}.join ", " }")
     if flags.include?("SentReminderToMailDrop")
-      subject = "#{reminder_email_prefix} #{email_prefix} #{subject}"
+      subject = "#{reminder_email_prefix}#{email_prefix}#{subject}"
     else
-      subject = "#{email_prefix} #{subject}"
+      subject = "#{email_prefix}#{subject}"
     end
-    if mailbox_name.include?("Reply to") and not envelope.from[0].name.empty?
-      subject.sub!(/Reply to:/, "Reply to #{envelope.from[0].name} regarding:")
-    end
-    plain_text = envelope.message_id.sub(/<(.*)\>/i, "\r\nmessage:<\\1>\r\n\r\n")
-    html_text = envelope.message_id.sub(/<(.*)\>/i, "\r\n<br>message:&lt;\\1&gt;\r\n<br>\r\n<br>\r\n")
+    plain_text = "\r\nFrom: #{envelope.from[0].name.nil? ? envelope.from[0].mailbox : envelope.from[0].name}\r\nTo: #{envelope.to.collect {|address| address.name.nil? ? address.mailbox : address.name.sub(/^'/, "").sub(/'$/, "")}.join ", " }\r\n#{envelope.message_id.sub(/<(.*)\>/i, "message:<\\1>")}\r\nSubject: #{envelope.subject}\r\n\r\n\r\n"
+    html_text = plain_text.gsub(/</, "&lt;").gsub(/>/, "&gt;").gsub(/\r\n/, "<br>\r\n").insert(-1, "<br>\r\n<br>\r\n")
 
     if boundary.nil?
       if content_transfer_encoding.include?("quoted-printable")
-        plain_text = plain_text.gsub(/=/, "=3d").length > 74 ? plain_text.gsub(/=/, "=3d").insert(73, "=\r\n") : plain_text.gsub(/=/, "=3d")
-        html_text = html_text.gsub(/=/, "=3d").length > 74 ? html_text.gsub(/=/, "=3d").insert(73, "=\r\n") : html_text.gsub(/=/, "=3d")
+        plain_text = plain_text.split("\r\n").collect {|line| line.gsub(/=/, "=3d").length > 74 ? line.gsub(/=/, "=3d").insert(73, "=\r\n") : line.gsub(/=/, "=3d")}.join "=\r\n"
+        html_text = html_text.split("\r\n").collect {|line| line.gsub(/=/, "=3d").length > 74 ? line.gsub(/=/, "=3d").insert(73, "=\r\n") : line.gsub(/=/, "=3d")}.join "=\r\n"
       end
       if content_type.include?("html") and content_transfer_encoding.include?("base64")
         email_body = Base64.encode64("#{html_text}#{Base64.decode64(email_body)}")
